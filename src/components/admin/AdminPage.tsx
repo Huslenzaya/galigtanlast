@@ -94,7 +94,7 @@ function makeSlug(value: string) {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/[^a-z0-9]+/gi, "-")
     .replace(/^-+|-+$/g, "");
 }
 
