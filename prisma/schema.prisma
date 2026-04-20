@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model User {
+  id           String @id @default(cuid())
+  name         String
+  email        String @unique
+  passwordHash String
+  role         Role   @default(STUDENT)
+
+  avatarUrl String?
+
+  grade  Int?
+  level  Int  @default(1)
+  xp     Int  @default(0)
+  coins  Int  @default(0)
+  streak Int  @default(0)
+  lives  Int  @default(5)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lessonProgress  UserLessonProgress[]
+  quizAttempts    QuizAttempt[]
+  writingAttempts WritingAttempt[]
+  coinRewards     UserCoinReward[]
+}
+
+model Lesson {
+  id          String       @id @default(cuid())
+  title       String
+  slug        String       @unique
+  description String?
+  grade       Int
+  level       Int
+  sortOrder   Int
+  content     String
+  status      LessonStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quiz     Quiz?
+  progress UserLessonProgress[]
+}
+
+model Quiz {
+  id          String  @id @default(cuid())
+  title       String
+  lessonId    String? @unique
+  isPlacement Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson    Lesson?        @relation(fields: [lessonId], references: [id])
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+}
+
+model QuizQuestion {
+  id           String  @id @default(cuid())
+  quizId       String
+  question     String
+  optionsJson  String
+  correctIndex Int
+  category     String?
+  difficulty   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model DictionaryWord {
+  id           String  @id @default(cuid())
+  scriptWord   String
+  romanization String?
+  cyrillicWord String
+  category     String?
+  description  String?
+  grade        Int?
+  level        Int?
+  isPublished  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Article {
+  id           String  @id @default(cuid())
+  title        String
+  levelLabel   String?
+  scriptText   String
+  cyrillicText String
+  isPublished  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserLessonProgress {
+  id          String         @id @default(cuid())
+  userId      String
+  lessonId    String
+  status      ProgressStatus @default(NOT_STARTED)
+  score       Int?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model QuizAttempt {
+  id           String    @id @default(cuid())
+  userId       String
+  quizId       String
+  score        Int
+  total        Int
+  correctCount Int
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model WritingAttempt {
+  id        String  @id @default(cuid())
+  userId    String
+  letter    String
+  score     Int
+  label     String
+  earnedXp  Int     @default(0)
+  completed Boolean @default(false)
+  attempts  Int     @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, letter])
+}
+
+model UserCoinReward {
+  id        String   @id @default(cuid())
+  userId    String
+  milestone Int
+  coins     Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, milestone])
+}

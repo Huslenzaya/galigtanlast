@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-mongolian: "Noto Sans Mongolian", serif;
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background-color: #fffef9;
+    color: #1a1a2e;
+  }
+
+  .mongolian {
+    font-family: var(--font-mongolian);
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    direction: ltr;
+  }
+}
+
+@layer components {
+  /* ── Scroll reveal — add class, JS adds .revealed ── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity 0.65s var(--ease-smooth), transform 0.65s var(--ease-smooth);
+  }
+  .reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+  .reveal-delay-3 { transition-delay: 0.3s; }
+  .reveal-delay-4 { transition-delay: 0.4s; }
+  .reveal-delay-5 { transition-delay: 0.5s; }
+  .reveal-left  { opacity:0; transform:translateX(-32px); transition: opacity .65s var(--ease-smooth), transform .65s var(--ease-smooth); }
+  .reveal-left.revealed  { opacity:1; transform:translateX(0); }
+  .reveal-right { opacity:0; transform:translateX(32px);  transition: opacity .65s var(--ease-smooth), transform .65s var(--ease-smooth); }
+  .reveal-right.revealed { opacity:1; transform:translateX(0); }
+  .reveal-scale { opacity:0; transform:scale(0.88);       transition: opacity .6s var(--ease-smooth), transform .6s var(--ease-spring); }
+  .reveal-scale.revealed { opacity:1; transform:scale(1); }
+
+  /* ── Card flip ── */
+  .flip-scene { perspective: 1000px; }
+  .flip-inner {
+    position: relative; width: 100%; height: 100%;
+    transition: transform 0.55s var(--ease-smooth);
+    transform-style: preserve-3d;
+  }
+  .flip-scene.flipped .flip-inner { transform: rotateY(180deg); }
+  .flip-face { position: absolute; inset: 0; backface-visibility: hidden; }
+  .flip-back { transform: rotateY(180deg); }
+
+  /* ── Progress bar ── */
+  .progress-fill { transition: width 0.5s var(--ease-spring); }
+
+  /* ── Quiz states ── */
+  .quiz-opt-correct { @apply border-grass-300 bg-grass-50; animation: pop .4s var(--ease-spring); }
+  .quiz-opt-wrong   { @apply border-ember-300 bg-ember-50; animation: wobble .4s ease; }
+
+  /* ── Balloon ── */
+  @keyframes riseUp { from { bottom:-80px; opacity:1; } to { bottom:110%; opacity:.7; } }
+  .balloon-rise { animation: riseUp linear forwards; }
+
+  /* ── Shimmer skeleton ── */
+  .shimmer {
+    background: linear-gradient(90deg, #f5f0e8 25%, #fffef9 50%, #f5f0e8 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+  /* ── Mongolian script glow ── */
+  .mg-glow { filter: drop-shadow(0 0 12px rgba(201,123,42,.35)); }
+
+  /* ── Page entrance ── */
+  .page-enter { animation: pageEnter .4s var(--ease-smooth) both; }
+  @keyframes pageEnter { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+
+  /* ── Floating orbs background ── */
+  .hero-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    animation: orbFloat 8s ease-in-out infinite;
+  }
+  @keyframes orbFloat {
+    0%,100% { transform: translate(0,0) scale(1); }
+    33%  { transform: translate(20px,-30px) scale(1.05); }
+    66%  { transform: translate(-15px,20px) scale(.97); }
+  }
+
+  /* ── Streak fire pulse ── */
+  .streak-pulse { animation: streakPulse 2s ease-in-out infinite; }
+  @keyframes streakPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
+}
+
+@layer utilities {
+  /* Bobs */
+  @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+  @keyframes pop { 0%{transform:scale(1)} 50%{transform:scale(1.06)} 100%{transform:scale(1)} }
+  @keyframes wobble { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes popIn { from{transform:scale(.5);opacity:0} to{transform:scale(1);opacity:1} }
+  @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+
+  .animate-bob    { animation: bob 4s ease-in-out infinite; }
+  .animate-bob-2  { animation: bob 4s ease-in-out infinite; animation-delay:-1.4s; }
+  .animate-bob-3  { animation: bob 4s ease-in-out infinite; animation-delay:-2.8s; }
+  .animate-bob-4  { animation: bob 4s ease-in-out infinite; animation-delay:-0.7s; }
+  .animate-pop    { animation: pop .4s var(--ease-spring); }
+  .animate-wobble { animation: wobble .4s ease; }
+  .animate-fade-up{ animation: fadeUp .35s ease; }
+  .animate-pop-in { animation: popIn .35s var(--ease-spring); }
+  .animate-slide-down { animation: slideDown .25s ease; }
+
+  .font-mongolian { font-family: var(--font-mongolian); }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
+  .text-balance { text-wrap: balance; }
+
+  /* Glass card */
+  .glass {
+    background: rgba(255,254,249,.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1.5px solid rgba(255,254,249,.6);
+  }
+}
