@@ -1,9 +1,0 @@
-{
-  "/shop/page": "app/shop/page.js",
-  "/api/profile/route": "app/api/profile/route.js",
-  "/games/page": "app/games/page.js",
-  "/profile/page": "app/profile/page.js",
-  "/admin/page": "app/admin/page.js",
-  "/dict/page": "app/dict/page.js",
-  "/writepractice/page": "app/writepractice/page.js"
-}

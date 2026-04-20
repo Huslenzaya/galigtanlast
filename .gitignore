@@ -1,5 +1,10 @@
+.next
 node_modules
-# Keep environment variables out of version control
 .env
-
-/generated/prisma
+.env.local
+.DS_Store
+.next
+node_modules
+.env
+.env.local
+.DS_Store
