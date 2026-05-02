@@ -36,21 +36,7 @@ const KB_CONSONANTS = [
   { mg: "ᠽ", latin: "Z", mn: "з" },
 ];
 
-// Common word suggestions (type-ahead)
-const COMMON_WORDS: { mg: string; mn: string }[] = [
-  { mg: "ᠮᠣᠩᠭᠣᠯ", mn: "Монгол" },
-  { mg: "ᠮᠣᠷᠢ", mn: "Морь" },
-  { mg: "ᠭᠡᠷ", mn: "Гэр" },
-  { mg: "ᠬᠦᠮᠦᠨ", mn: "Хүн" },
-  { mg: "ᠤᠰᠤ", mn: "Ус" },
-  { mg: "ᠨᠠᠷ", mn: "Нар" },
-  { mg: "ᠭᠠᠵᠠᠷ", mn: "Газар" },
-  { mg: "ᠲᠡᠩᠭᠡᠷ", mn: "Тэнгэр" },
-  { mg: "ᠴᠠᠭ", mn: "Цаг" },
-  { mg: "ᠪᠢᠴᠢᠬᠦ", mn: "Бичих" },
-  { mg: "ᠤᠩᠰᠢᠬᠤ", mn: "Унших" },
-  { mg: "ᠰᠠᠶᠢᠨ", mn: "Сайн" },
-];
+const KB_LETTERS = [...KB_VOWELS, ...KB_CONSONANTS];
 
 interface MongolianKeyboardProps {
   value: string;
@@ -59,6 +45,7 @@ interface MongolianKeyboardProps {
   placeholder?: string;
   mode?: "inline" | "toggle";
   showMn?: boolean;
+  compact?: boolean;
 }
 
 function cleanPastedText(text: string) {
@@ -72,17 +59,10 @@ export function MongolianKeyboard({
   placeholder = "ᠮᠣᠩᠭᠣᠯ ᠪᠢᠴᠢᠭ᠌ — дарж бичнэ",
   mode = "toggle",
   showMn = true,
+  compact = false,
 }: MongolianKeyboardProps) {
   const [open, setOpen] = useState(mode === "inline");
-  const [activeTab, setActiveTab] = useState<"vowels" | "consonants">("vowels");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const suggestions =
-    value.length > 0
-      ? COMMON_WORDS.filter(
-          (w) => w.mg.startsWith(value) && w.mg !== value,
-        ).slice(0, 4)
-      : [];
 
   const charCount = [...value].length;
 
@@ -115,18 +95,6 @@ export function MongolianKeyboard({
     arr.pop();
     onChange(arr.join(""));
     focusInput();
-  }
-
-  async function pasteFromClipboard() {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text) return;
-      onChange(cleanPastedText(value + text));
-      if (!open && mode === "toggle") setOpen(true);
-      focusInput();
-    } catch {
-      // ignore clipboard permission errors
-    }
   }
 
   const verticalValue = (
@@ -189,7 +157,7 @@ export function MongolianKeyboard({
               {placeholder}
             </span>
             <span className="text-[11px] text-ink-muted/70 font-semibold mt-1 select-none">
-              Paste хийх бол энэ хэсэг дээр дараад Ctrl+V / Cmd+V
+              Доорх үсгүүдээс дарж бичнэ.
             </span>
           </div>
         )}
@@ -209,17 +177,6 @@ export function MongolianKeyboard({
             ×
           </button>
         )}
-
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            pasteFromClipboard();
-          }}
-          className="text-[11px] font-bold text-sky-300 px-2 py-0.5 rounded-lg hover:bg-sky-50 transition-all">
-          Paste
-        </button>
 
         {value && (
           <button
@@ -246,52 +203,24 @@ export function MongolianKeyboard({
   const keyboard = (
     <div
       className={cn(
-        "bg-white border-2 border-paper-100 rounded-2xl overflow-hidden shadow-medium",
+        "bg-white border-2 border-paper-100 rounded-2xl overflow-hidden",
+        !compact && "shadow-medium",
         mode === "toggle" && "mt-1.5 animate-fade-up",
       )}>
       <div className="bg-paper-50 border-b-2 border-paper-100 px-3 py-2 flex items-center justify-between">
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("vowels")}
-            className={cn(
-              "text-[11px] font-extrabold px-3 py-1.5 rounded-xl transition-all",
-              activeTab === "vowels"
-                ? "bg-sky-300 text-white"
-                : "text-ink-muted hover:bg-paper-100",
-            )}>
-            Эгшиг ({KB_VOWELS.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("consonants")}
-            className={cn(
-              "text-[11px] font-extrabold px-3 py-1.5 rounded-xl transition-all",
-              activeTab === "consonants"
-                ? "bg-sand-300 text-white"
-                : "text-ink-muted hover:bg-paper-100",
-            )}>
-            Гийгүүлэгч ({KB_CONSONANTS.length})
-          </button>
-        </div>
+        <span className="text-[12px] font-extrabold text-sky-300">
+          Монгол бичгийн үсгүүд
+        </span>
 
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-ink-muted">
-            Монгол Бичгийн Гар
-          </span>
-          <button
-            type="button"
-            onClick={pasteFromClipboard}
-            className="text-[10px] font-extrabold text-sky-300 px-2 py-1 rounded-lg hover:bg-sky-50 transition-all">
-            Paste
-          </button>
-        </div>
+        <span className="text-[10px] font-bold text-ink-muted">
+          {KB_LETTERS.length} үсэг
+        </span>
       </div>
 
       <div className="p-3">
         <div className="flex flex-wrap gap-1.5">
-          {(activeTab === "vowels" ? KB_VOWELS : KB_CONSONANTS).map(
-            ({ mg, latin, mn }) => (
+          {KB_LETTERS.map(
+            ({ mg, mn }) => (
               <button
                 type="button"
                 key={mg}
@@ -300,16 +229,8 @@ export function MongolianKeyboard({
                   press(mg);
                 }}
                 className="bg-paper-50 border-2 border-paper-100 hover:border-sky-100 hover:bg-sky-50 active:scale-90 rounded-xl p-2 flex flex-col items-center gap-0.5 transition-all min-w-[48px]">
-                {showMn && (
-                  <span className="text-[9px] font-extrabold text-ink-muted/60">
-                    {mn}
-                  </span>
-                )}
                 <span
-                  className={cn(
-                    "font-mongolian",
-                    activeTab === "vowels" ? "text-sky-300" : "text-sand-300",
-                  )}
+                  className="font-mongolian text-sky-300"
                   style={{
                     writingMode: "vertical-lr",
                     fontSize: 20,
@@ -317,9 +238,11 @@ export function MongolianKeyboard({
                   }}>
                   {mg}
                 </span>
-                <span className="text-[9px] font-extrabold text-ink-muted">
-                  {latin}
-                </span>
+                {showMn && (
+                  <span className="text-[10px] font-extrabold text-ink-muted">
+                    Кирилл: {mn}
+                  </span>
+                )}
               </button>
             ),
           )}
@@ -360,39 +283,7 @@ export function MongolianKeyboard({
         </div>
       </div>
 
-      {suggestions.length > 0 && (
-        <div className="border-t-2 border-paper-100 px-3 py-2 flex gap-2 flex-wrap">
-          <span className="text-[10px] font-extrabold text-ink-muted self-center">
-            Санал:
-          </span>
-          {suggestions.map((s) => (
-            <button
-              type="button"
-              key={s.mg}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onChange(s.mg);
-                focusInput();
-              }}
-              className="bg-sand-50 border-2 border-sand-100 hover:bg-sand-100 rounded-xl px-2.5 py-1 flex items-center gap-2 transition-all">
-              <span
-                className="font-mongolian text-sand-300"
-                style={{
-                  writingMode: "vertical-lr",
-                  fontSize: 14,
-                  height: 20,
-                }}>
-                {s.mg}
-              </span>
-              <span className="text-[11px] font-bold text-ink-muted">
-                {s.mn}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {value && (
+      {!compact && value && (
         <div className="border-t-2 border-paper-100 bg-sand-50 px-4 py-3 flex items-start gap-3">
           <span className="text-[10px] font-extrabold text-sand-300 uppercase shrink-0 pt-1">
             Одоогийн утга:
@@ -431,7 +322,7 @@ export function MongolianKeyboard({
           {label}
         </p>
       )}
-      {inputDisplay}
+      {!compact && inputDisplay}
       {(open || mode === "inline") && keyboard}
     </div>
   );

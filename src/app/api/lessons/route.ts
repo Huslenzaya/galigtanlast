@@ -1,13 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const lessons = await prisma.lesson.findMany({
       where: {
         status: "PUBLISHED",
       },
-      orderBy: [{ grade: "asc" }, { level: "asc" }, { sortOrder: "asc" }],
+      orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
       select: {
         id: true,
         title: true,

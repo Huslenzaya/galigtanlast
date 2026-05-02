@@ -8,6 +8,7 @@ interface PageHeroProps {
   title: string;
   description: string;
   mongolText?: string;
+  rightText?: string[];
   variant?: "dark" | "sky" | "purple" | "sand" | "grass" | "ember";
 }
 
@@ -49,9 +50,11 @@ export function PageHero({
   title,
   description,
   mongolText = "ᠮᠣᠩᠭᠣᠯ",
+  rightText,
   variant = "dark",
 }: PageHeroProps) {
   const style = VARIANTS[variant];
+  const decorativeText = rightText?.length ? rightText.join(" ") : mongolText;
 
   return (
     <section
@@ -68,7 +71,7 @@ export function PageHero({
             letterSpacing: 8,
             lineHeight: 1,
           }}>
-          {mongolText}
+          {decorativeText}
         </span>
       </div>
 

@@ -3,9 +3,19 @@
 import { AdminModal } from "@/components/admin/AdminModal";
 import { QuizAdmin } from "@/components/admin/QuizAdmin";
 import { UsersAdmin } from "@/components/admin/UsersAdmin";
+import {
+  IconAward,
+  IconBook,
+  IconGlobe,
+  IconLayers,
+  IconPen,
+  IconTarget,
+} from "@/components/ui/Icons";
 import { MongolianKeyboard } from "@/components/ui/MongolianKeyboard";
+import { LEVEL_META, getLevelMeta } from "@/lib/data";
 import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type AdminTab = "overview" | "lessons" | "words" | "users" | "content" | "quiz";
@@ -68,8 +78,23 @@ const EMPTY_LESSON = {
   level: 1,
   sortOrder: 1,
   content: "",
+  keyPoints: "",
+  examples: "",
+  tasks: "",
+  wrapUp: "",
   status: "PUBLISHED" as LessonStatus,
 };
+
+const GUIDED_LESSON_VERSION = 1;
+
+interface GuidedLessonContent {
+  version: number;
+  intro: string;
+  keyPoints: string[];
+  examples: { script: string; cyrillic: string; note?: string }[];
+  tasks: { prompt: string; answer: string; hint?: string }[];
+  wrapUp?: string;
+}
 
 const EMPTY_WORD = {
   scriptWord: "",
@@ -98,6 +123,115 @@ function makeSlug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function lines(value: string) {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function parsePipeRows(value: string, expectedMin: number) {
+  return lines(value)
+    .map((line) => line.split("|").map((part) => part.trim()))
+    .filter((parts) => parts.length >= expectedMin && parts[0] && parts[1]);
+}
+
+function buildGuidedLessonContent(form: typeof EMPTY_LESSON) {
+  const content: GuidedLessonContent = {
+    version: GUIDED_LESSON_VERSION,
+    intro: form.content.trim(),
+    keyPoints: lines(form.keyPoints),
+    examples: parsePipeRows(form.examples, 2).map(([script, cyrillic, note]) => ({
+      script,
+      cyrillic,
+      note: note || "",
+    })),
+    tasks: parsePipeRows(form.tasks, 2).map(([prompt, answer, hint]) => ({
+      prompt,
+      answer,
+      hint: hint || "",
+    })),
+    wrapUp: form.wrapUp.trim(),
+  };
+
+  const hasGuidedParts =
+    content.keyPoints.length > 0 ||
+    content.examples.length > 0 ||
+    content.tasks.length > 0 ||
+    !!content.wrapUp;
+
+  return hasGuidedParts ? JSON.stringify(content, null, 2) : form.content;
+}
+
+function parseGuidedLessonContent(content: string): Partial<typeof EMPTY_LESSON> {
+  try {
+    const parsed = JSON.parse(content) as Partial<GuidedLessonContent>;
+    if (parsed.version !== GUIDED_LESSON_VERSION) return { content };
+
+    return {
+      content: parsed.intro ?? "",
+      keyPoints: Array.isArray(parsed.keyPoints)
+        ? parsed.keyPoints.join("\n")
+        : "",
+      examples: Array.isArray(parsed.examples)
+        ? parsed.examples
+            .map((item) =>
+              [item.script, item.cyrillic, item.note].filter(Boolean).join(" | "),
+            )
+            .join("\n")
+        : "",
+      tasks: Array.isArray(parsed.tasks)
+        ? parsed.tasks
+            .map((item) =>
+              [item.prompt, item.answer, item.hint].filter(Boolean).join(" | "),
+            )
+            .join("\n")
+        : "",
+      wrapUp: parsed.wrapUp ?? "",
+    };
+  } catch {
+    return { content };
+  }
+}
+
+const LEVEL_TONE_MAP = {
+  sky: "bg-sky-50 border-sky-100 text-sky-300",
+  grass: "bg-grass-50 border-grass-100 text-grass-300",
+  sand: "bg-sand-50 border-sand-100 text-sand-300",
+  ember: "bg-ember-50 border-ember-100 text-ember-300",
+  purple: "bg-[#f1ecfb] border-[#d8c8f1] text-[#7c5cbf]",
+  teal: "bg-[#e6f7f4] border-[#b9e6df] text-[#1a9e8a]",
+} as const;
+
+function LevelIcon({ icon, size = 15 }: { icon: string; size?: number }) {
+  const props = { size, strokeWidth: 2.2 };
+
+  if (icon === "layers") return <IconLayers {...props} />;
+  if (icon === "pen") return <IconPen {...props} />;
+  if (icon === "target") return <IconTarget {...props} />;
+  if (icon === "award") return <IconAward {...props} />;
+  if (icon === "globe") return <IconGlobe {...props} />;
+  return <IconBook {...props} />;
+}
+
+function LevelBadge({ level }: { level: number }) {
+  const meta = getLevelMeta(level);
+  const tone =
+    LEVEL_TONE_MAP[meta.tone as keyof typeof LEVEL_TONE_MAP] ??
+    LEVEL_TONE_MAP.sky;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 border text-[10px] font-extrabold px-2.5 py-1 rounded-lg",
+        tone,
+      )}>
+      <LevelIcon icon={meta.icon} size={12} />
+      {meta.title}
+    </span>
+  );
+}
+
 function lessonStatusLabel(status: LessonStatus) {
   return status === "PUBLISHED" ? "Нийтэлсэн" : "Ноорог";
 }
@@ -107,6 +241,7 @@ function publishLabel(isPublished: boolean) {
 }
 
 export function AdminPage() {
+  const router = useRouter();
   const { isAdmin, goTo, logout, userName } = useAppStore();
 
   const [tab, setTab] = useState<AdminTab>("overview");
@@ -125,6 +260,16 @@ export function AdminPage() {
   const [lessonForm, setLessonForm] = useState(EMPTY_LESSON);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [savingLesson, setSavingLesson] = useState(false);
+  const [exampleDraft, setExampleDraft] = useState({
+    script: "",
+    cyrillic: "",
+    note: "",
+  });
+  const [taskDraft, setTaskDraft] = useState({
+    prompt: "",
+    answer: "",
+    hint: "",
+  });
 
   const [wordForm, setWordForm] = useState(EMPTY_WORD);
   const [editingWordId, setEditingWordId] = useState<string | null>(null);
@@ -201,6 +346,8 @@ export function AdminPage() {
   function resetLessonForm() {
     setLessonForm(EMPTY_LESSON);
     setEditingLessonId(null);
+    setExampleDraft({ script: "", cyrillic: "", note: "" });
+    setTaskDraft({ prompt: "", answer: "", hint: "" });
   }
 
   function resetWordForm() {
@@ -213,6 +360,34 @@ export function AdminPage() {
     setEditingArticleId(null);
   }
 
+  function appendExampleDraft() {
+    if (!exampleDraft.script || !exampleDraft.cyrillic) return;
+
+    const row = [exampleDraft.script, exampleDraft.cyrillic, exampleDraft.note]
+      .filter(Boolean)
+      .join(" | ");
+
+    setLessonForm((prev) => ({
+      ...prev,
+      examples: [prev.examples, row].filter(Boolean).join("\n"),
+    }));
+    setExampleDraft({ script: "", cyrillic: "", note: "" });
+  }
+
+  function appendTaskDraft() {
+    if (!taskDraft.prompt || !taskDraft.answer) return;
+
+    const row = [taskDraft.prompt, taskDraft.answer, taskDraft.hint]
+      .filter(Boolean)
+      .join(" | ");
+
+    setLessonForm((prev) => ({
+      ...prev,
+      tasks: [prev.tasks, row].filter(Boolean).join("\n"),
+    }));
+    setTaskDraft({ prompt: "", answer: "", hint: "" });
+  }
+
   async function saveLesson() {
     if (!lessonForm.title) return;
 
@@ -223,6 +398,7 @@ export function AdminPage() {
       const payload = {
         ...lessonForm,
         slug: lessonForm.slug || makeSlug(lessonForm.title),
+        content: buildGuidedLessonContent(lessonForm),
       };
 
       const res = await fetch(
@@ -260,19 +436,7 @@ export function AdminPage() {
   }
 
   function startEditLesson(lesson: AdminLesson) {
-    setLessonForm({
-      title: lesson.title,
-      slug: lesson.slug,
-      description: lesson.description ?? "",
-      grade: lesson.grade,
-      level: lesson.level,
-      sortOrder: lesson.sortOrder,
-      content: lesson.content,
-      status: lesson.status,
-    });
-    setEditingLessonId(lesson.id);
-    setTab("lessons");
-    setModal("lesson");
+    router.push(`/admin/lessons/${lesson.id}/edit`);
   }
 
   async function deleteLesson(id: string) {
@@ -491,6 +655,45 @@ export function AdminPage() {
     ];
   }, [lessons, words, articles]);
 
+  const lessonLevelGroups = useMemo(
+    () =>
+      LEVEL_META.map((meta) => {
+        const items = lessons.filter((lesson) => lesson.level === meta.n);
+        return {
+          meta,
+          total: items.length,
+          published: items.filter((lesson) => lesson.status === "PUBLISHED")
+            .length,
+          draft: items.filter((lesson) => lesson.status === "DRAFT").length,
+        };
+      }),
+    [lessons],
+  );
+
+  const lessonFormChecks = [
+    {
+      label: "Нэр ба тайлбар",
+      done: !!lessonForm.title.trim() && !!lessonForm.description.trim(),
+    },
+    {
+      label: "Гол зорилго",
+      done: !!lessonForm.content.trim(),
+    },
+    {
+      label: "Санах дүрэм",
+      done: lines(lessonForm.keyPoints).length >= 2,
+    },
+    {
+      label: "Жишээ үг",
+      done: parsePipeRows(lessonForm.examples, 2).length >= 2,
+    },
+    {
+      label: "Дасгал",
+      done: parsePipeRows(lessonForm.tasks, 2).length >= 2,
+    },
+  ];
+  const lessonFormReady = lessonFormChecks.filter((item) => item.done).length;
+
   if (!isAdmin) {
     return (
       <div className="max-w-[520px] mx-auto px-6 py-20 text-center">
@@ -663,9 +866,9 @@ export function AdminPage() {
                                 <p className="text-[13px] font-bold truncate">
                                   {lesson.title}
                                 </p>
-                                <p className="text-[11px] text-ink-muted font-semibold">
-                                  {lesson.grade}-р анги · {lesson.level}-р шат
-                                </p>
+                                <div className="mt-1">
+                                  <LevelBadge level={lesson.level} />
+                                </div>
                               </div>
                               <button
                                 onClick={() => startEditLesson(lesson)}
@@ -717,22 +920,78 @@ export function AdminPage() {
 
                 {tab === "lessons" && (
                   <div>
-                    <div className="bg-white border-2 border-paper-100 rounded-2xl p-5 mb-5 flex items-center justify-between">
+                    <div className="bg-white border-2 border-paper-100 rounded-2xl p-5 mb-5 flex items-center justify-between gap-4">
                       <div>
                         <h3 className="text-[20px] font-black">Хичээлүүд</h3>
                         <p className="text-[13px] text-ink-muted font-semibold mt-1">
-                          Сурагчдад харагдах хичээлийн агуулгыг удирдана.
+                          Түвшин бүрээр сурах зам, хичээл, дасгал, шалгалтыг
+                          нэг бүтэцтэй удирдана.
                         </p>
                       </div>
 
                       <button
-                        onClick={() => {
-                          resetLessonForm();
-                          setModal("lesson");
-                        }}
+                        onClick={() => router.push("/admin/lessons/new")}
                         className="bg-sky-300 text-white font-extrabold text-[14px] px-5 py-3 rounded-2xl hover:bg-sky-200 transition-all">
                         + Хичээл нэмэх
                       </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-5">
+                      {lessonLevelGroups.map(({ meta, total, published, draft }) => {
+                        const tone =
+                          LEVEL_TONE_MAP[
+                            meta.tone as keyof typeof LEVEL_TONE_MAP
+                          ] ?? LEVEL_TONE_MAP.sky;
+
+                        return (
+                          <div
+                            key={meta.n}
+                            className="bg-white border-2 border-paper-100 rounded-2xl p-5">
+                            <div className="flex items-start justify-between gap-3">
+                              <div
+                                className={cn(
+                                  "w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0",
+                                  tone,
+                                )}>
+                                <LevelIcon icon={meta.icon} size={20} />
+                              </div>
+                              <LevelBadge level={meta.n} />
+                            </div>
+                            <h4 className="text-[16px] font-black text-ink mt-4">
+                              {meta.subtitle}
+                            </h4>
+                            <p className="text-[12px] text-ink-muted font-semibold leading-relaxed mt-1 line-clamp-2">
+                              {meta.description}
+                            </p>
+                            <div className="grid grid-cols-3 gap-2 mt-4">
+                              <div className="bg-paper-50 rounded-xl px-3 py-2">
+                                <p className="text-[18px] font-black text-ink">
+                                  {total}
+                                </p>
+                                <p className="text-[10px] font-bold text-ink-muted">
+                                  бүгд
+                                </p>
+                              </div>
+                              <div className="bg-grass-50 rounded-xl px-3 py-2">
+                                <p className="text-[18px] font-black text-grass-300">
+                                  {published}
+                                </p>
+                                <p className="text-[10px] font-bold text-grass-300">
+                                  нийтэлсэн
+                                </p>
+                              </div>
+                              <div className="bg-sand-50 rounded-xl px-3 py-2">
+                                <p className="text-[18px] font-black text-sand-300">
+                                  {draft}
+                                </p>
+                                <p className="text-[10px] font-bold text-sand-300">
+                                  ноорог
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="bg-white border-2 border-paper-100 rounded-2xl overflow-hidden">
@@ -749,7 +1008,7 @@ export function AdminPage() {
                         <table className="w-full text-[12px]">
                           <thead className="border-b-2 border-paper-100 bg-white sticky top-0">
                             <tr>
-                              {["Гарчиг", "Анги", "Шат", "Төлөв", ""].map(
+                              {["Гарчиг", "Түвшин", "Төлөв", ""].map(
                                 (h) => (
                                   <th
                                     key={h}
@@ -773,11 +1032,8 @@ export function AdminPage() {
                                     {lesson.description || "Тайлбаргүй"}
                                   </p>
                                 </td>
-                                <td className="px-4 py-3 font-bold">
-                                  {lesson.grade}-р анги
-                                </td>
-                                <td className="px-4 py-3 font-bold">
-                                  {lesson.level}-р шат
+                                <td className="px-4 py-3">
+                                  <LevelBadge level={lesson.level} />
                                 </td>
                                 <td className="px-4 py-3">
                                   <span
@@ -809,7 +1065,7 @@ export function AdminPage() {
                             {lessons.length === 0 && (
                               <tr>
                                 <td
-                                  colSpan={5}
+                                  colSpan={4}
                                   className="px-4 py-10 text-center text-[13px] text-ink-muted font-semibold">
                                   Хичээл алга байна. Эхний хичээлээ нэмнэ үү.
                                 </td>
@@ -1050,13 +1306,72 @@ export function AdminPage() {
       <AdminModal
         open={modal === "lesson"}
         title={editingLessonId ? "Хичээл засварлах" : "Хичээл нэмэх"}
-        description="Хичээлийн нэр, анги, шат, агуулгыг оруулна."
+        description="Түвшин, сурах зорилго, жишээ, даалгавар, шалгалтын бэлтгэлийг нэг дор зохионо."
         onClose={() => {
           setModal(null);
           resetLessonForm();
         }}
         size="lg">
         <div className="flex flex-col gap-4">
+          <div className="bg-paper-50 border-2 border-paper-100 rounded-3xl p-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+              <div>
+                <p className="text-[12px] font-black text-sky-300 uppercase tracking-[1px]">
+                  Lesson Studio
+                </p>
+                <h3 className="text-[20px] font-black text-ink mt-1">
+                  Хүүхэд өөрөө сураад гарах хичээл зохиох
+                </h3>
+              </div>
+              <span
+                className={cn(
+                  "text-[12px] font-extrabold px-3 py-1.5 rounded-xl border",
+                  lessonFormReady === lessonFormChecks.length
+                    ? "bg-grass-50 text-grass-300 border-grass-100"
+                    : "bg-sand-50 text-sand-300 border-sand-100",
+                )}>
+                {lessonFormReady}/{lessonFormChecks.length} бэлэн
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
+              {[
+                ["1", "Зорилго", "Юу сурахыг тодорхой болго"],
+                ["2", "Дүрэм", "Гол санааг богино мөрөөр өг"],
+                ["3", "Жишээ", "Монгол бичиг + кирилл утга"],
+                ["4", "Дасгал", "Шалгалт руу бэлтгэх ажил"],
+              ].map(([n, title, desc]) => (
+                <div
+                  key={n}
+                  className="bg-white border border-paper-100 rounded-2xl p-3">
+                  <span className="w-7 h-7 rounded-xl bg-sky-50 text-sky-300 border border-sky-100 flex items-center justify-center text-[11px] font-black mb-2">
+                    {n}
+                  </span>
+                  <p className="text-[12px] font-black text-ink">{title}</p>
+                  <p className="text-[10px] text-ink-muted font-semibold leading-snug mt-0.5">
+                    {desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {lessonFormChecks.map((item) => (
+                <span
+                  key={item.label}
+                  className={cn(
+                    "text-[11px] font-extrabold px-3 py-1.5 rounded-xl border",
+                    item.done
+                      ? "bg-grass-50 text-grass-300 border-grass-100"
+                      : "bg-white text-ink-muted border-paper-100",
+                  )}>
+                  {item.done ? "Бэлэн · " : "Дутуу · "}
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
           <div>
             <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
               Хичээлийн нэр
@@ -1075,30 +1390,12 @@ export function AdminPage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-[1fr_150px] gap-3">
             <div>
               <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
-                Анги
+                Түвшин
               </p>
-              <input
-                type="number"
-                className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-bold text-[14px] outline-none focus:border-sky-100 transition-all"
-                value={lessonForm.grade}
-                onChange={(e) =>
-                  setLessonForm((p) => ({
-                    ...p,
-                    grade: Number(e.target.value),
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
-                Шат
-              </p>
-              <input
-                type="number"
+              <select
                 className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-bold text-[14px] outline-none focus:border-sky-100 transition-all"
                 value={lessonForm.level}
                 onChange={(e) =>
@@ -1106,8 +1403,16 @@ export function AdminPage() {
                     ...p,
                     level: Number(e.target.value),
                   }))
-                }
-              />
+                }>
+                {LEVEL_META.map((level) => (
+                  <option key={level.n} value={level.n}>
+                    {level.title} · {level.subtitle}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-2">
+                <LevelBadge level={lessonForm.level} />
+              </div>
             </div>
 
             <div>
@@ -1165,7 +1470,7 @@ export function AdminPage() {
 
           <div>
             <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
-              Хичээлийн агуулга
+              Хичээлийн гол тайлбар
             </p>
             <textarea
               className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-semibold text-[13px] outline-none focus:border-sky-100 transition-all resize-none h-40"
@@ -1173,7 +1478,185 @@ export function AdminPage() {
               onChange={(e) =>
                 setLessonForm((p) => ({ ...p, content: e.target.value }))
               }
-              placeholder="Хичээлийн үндсэн агуулгыг бичнэ..."
+              placeholder="Өнөөдрийн хичээлээр юу сурахыг хүүхдэд ойлгомжтой тайлбарлана..."
+            />
+          </div>
+
+          <div className="bg-sky-50 border-2 border-sky-100 rounded-3xl p-4">
+            <p className="text-[13px] font-black text-sky-300 mb-1">
+              Хүүхдэд зориулсан алхамчилсан хичээл
+            </p>
+            <p className="text-[12px] text-ink-muted font-semibold leading-relaxed">
+              Эдгээр талбарыг бөглөвөл сурагч талд “дүрэм → жишээ → даалгавар
+              → төгсгөлийн шалгалт” гэсэн flow болж харагдана. Хоосон орхивол
+              хуучин энгийн агуулга хэвээр ашиглагдана.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
+              Санах дүрмүүд
+            </p>
+            <textarea
+              className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-semibold text-[13px] outline-none focus:border-sky-100 transition-all resize-none h-28"
+              value={lessonForm.keyPoints}
+              onChange={(e) =>
+                setLessonForm((p) => ({ ...p, keyPoints: e.target.value }))
+              }
+              placeholder={"Нэг мөрөнд нэг дүрэм бичнэ.\nЭгшиг үсэг үгийн эхэнд тод бичигдэнэ.\nᠠ нь кирилл а авиаг илэрхийлнэ."}
+            />
+          </div>
+
+          <div>
+            <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
+              Жишээ үгс
+            </p>
+            <div className="bg-paper-50 border-2 border-paper-100 rounded-3xl p-4 mb-3">
+              <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-3">
+                <MongolianKeyboard
+                  label="Монгол бичгийн жишээ"
+                  value={exampleDraft.script}
+                  onChange={(value) =>
+                    setExampleDraft((prev) => ({ ...prev, script: value }))
+                  }
+                  mode="inline"
+                  placeholder="Үсгүүдээс дарж жишээ үгээ бичнэ..."
+                />
+                <div className="flex flex-col gap-3">
+                  <input
+                    className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-bold text-[14px] outline-none focus:border-sky-100 bg-white"
+                    value={exampleDraft.cyrillic}
+                    onChange={(e) =>
+                      setExampleDraft((prev) => ({
+                        ...prev,
+                        cyrillic: e.target.value,
+                      }))
+                    }
+                    placeholder="Кирилл утга: морь"
+                  />
+                  <input
+                    className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-semibold text-[13px] outline-none focus:border-sky-100 bg-white"
+                    value={exampleDraft.note}
+                    onChange={(e) =>
+                      setExampleDraft((prev) => ({
+                        ...prev,
+                        note: e.target.value,
+                      }))
+                    }
+                    placeholder="Тайлбар: м + о + р + и"
+                  />
+                  <button
+                    type="button"
+                    onClick={appendExampleDraft}
+                    disabled={!exampleDraft.script || !exampleDraft.cyrillic}
+                    className={cn(
+                      "font-extrabold text-[13px] px-4 py-3 rounded-2xl transition-all",
+                      exampleDraft.script && exampleDraft.cyrillic
+                        ? "bg-sky-300 text-white hover:bg-sky-200"
+                        : "bg-paper-100 text-ink-muted cursor-not-allowed",
+                    )}>
+                    Жишээнд нэмэх
+                  </button>
+                </div>
+              </div>
+            </div>
+            <textarea
+              className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-semibold text-[13px] outline-none focus:border-sky-100 transition-all resize-none h-28"
+              value={lessonForm.examples}
+              onChange={(e) =>
+                setLessonForm((p) => ({ ...p, examples: e.target.value }))
+              }
+              placeholder={"Монгол бичиг | Кирилл | Тайлбар гэсэн хэлбэртэй.\nᠮᠣᠷᠢ | морь | Үгийн төгсгөлд и авиа орно\nᠭᠡᠷ | гэр | Богино үг унших дасгал"}
+            />
+          </div>
+
+          <div>
+            <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
+              Хичээлийн даалгавар
+            </p>
+            <div className="bg-paper-50 border-2 border-paper-100 rounded-3xl p-4 mb-3">
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-3">
+                <div className="flex flex-col gap-3">
+                  <textarea
+                    className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-bold text-[14px] outline-none focus:border-sky-100 bg-white resize-none h-24"
+                    value={taskDraft.prompt}
+                    onChange={(e) =>
+                      setTaskDraft((prev) => ({
+                        ...prev,
+                        prompt: e.target.value,
+                      }))
+                    }
+                    placeholder="Даалгаврын асуулт: “гэр” гэдэг үгийг монгол бичгээр бич"
+                  />
+                  <input
+                    className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-semibold text-[13px] outline-none focus:border-sky-100 bg-white"
+                    value={taskDraft.hint}
+                    onChange={(e) =>
+                      setTaskDraft((prev) => ({
+                        ...prev,
+                        hint: e.target.value,
+                      }))
+                    }
+                    placeholder="Санамж: г + э + р"
+                  />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <MongolianKeyboard
+                    label="Зөв хариулт монгол бичгээр бол"
+                    value={taskDraft.answer}
+                    onChange={(value) =>
+                      setTaskDraft((prev) => ({ ...prev, answer: value }))
+                    }
+                    mode="inline"
+                    placeholder="Монгол бичгийн хариулт бол энд үсгээр бичнэ..."
+                  />
+                  <input
+                    className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-bold text-[14px] outline-none focus:border-sky-100 bg-white"
+                    value={taskDraft.answer}
+                    onChange={(e) =>
+                      setTaskDraft((prev) => ({
+                        ...prev,
+                        answer: e.target.value,
+                      }))
+                    }
+                    placeholder="Эсвэл кирилл/латин хариулт бичнэ"
+                  />
+                  <button
+                    type="button"
+                    onClick={appendTaskDraft}
+                    disabled={!taskDraft.prompt || !taskDraft.answer}
+                    className={cn(
+                      "font-extrabold text-[13px] px-4 py-3 rounded-2xl transition-all",
+                      taskDraft.prompt && taskDraft.answer
+                        ? "bg-grass-300 text-white hover:bg-grass-200"
+                        : "bg-paper-100 text-ink-muted cursor-not-allowed",
+                    )}>
+                    Даалгаварт нэмэх
+                  </button>
+                </div>
+              </div>
+            </div>
+            <textarea
+              className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-semibold text-[13px] outline-none focus:border-sky-100 transition-all resize-none h-32"
+              value={lessonForm.tasks}
+              onChange={(e) =>
+                setLessonForm((p) => ({ ...p, tasks: e.target.value }))
+              }
+              placeholder={"Асуулт | Зөв хариулт | Санамж гэсэн хэлбэртэй.\nᠮᠣᠷᠢ гэдэг үгийг кириллээр бич | морь | амьтны нэр\n“гэр” гэдэг үгийг монгол бичгээр бич | ᠭᠡᠷ | г + э + р"}
+            />
+          </div>
+
+          <div>
+            <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
+              Дуусгах урамшуулал
+            </p>
+            <textarea
+              className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 font-semibold text-[13px] outline-none focus:border-sky-100 transition-all resize-none h-20"
+              value={lessonForm.wrapUp}
+              onChange={(e) =>
+                setLessonForm((p) => ({ ...p, wrapUp: e.target.value }))
+              }
+              placeholder="Одоо чи энэ хичээлийн үгсийг уншиж, бичиж чадна. Шалгалтаар бататгая!"
             />
           </div>
 
@@ -1199,8 +1682,10 @@ export function AdminPage() {
               {savingLesson
                 ? "Хадгалж байна..."
                 : editingLessonId
-                  ? "Засвар хадгалах"
-                  : "Хичээл нэмэх"}
+                  ? "Хичээл шинэчлэх"
+                  : lessonForm.status === "PUBLISHED"
+                    ? "Хичээл нийтлэх"
+                    : "Ноорог хадгалах"}
             </button>
           </div>
         </div>
@@ -1290,39 +1775,28 @@ export function AdminPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
-                Анги
-              </p>
-              <input
-                type="number"
-                className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 bg-white font-bold text-[14px] outline-none focus:border-sky-100 transition-all"
-                value={wordForm.grade}
-                onChange={(e) =>
-                  setWordForm((p) => ({
-                    ...p,
-                    grade: Number(e.target.value),
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
-                Шат
-              </p>
-              <input
-                type="number"
-                className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 bg-white font-bold text-[14px] outline-none focus:border-sky-100 transition-all"
-                value={wordForm.level}
-                onChange={(e) =>
-                  setWordForm((p) => ({
-                    ...p,
-                    level: Number(e.target.value),
-                  }))
-                }
-              />
+          <div>
+            <p className="text-[11px] font-extrabold text-ink-muted uppercase mb-1.5">
+              Түвшин
+            </p>
+            <select
+              className="w-full border-2 border-paper-100 rounded-2xl px-4 py-3 bg-white font-bold text-[14px] outline-none focus:border-sky-100 transition-all"
+              value={wordForm.level}
+              onChange={(e) =>
+                setWordForm((p) => ({
+                  ...p,
+                  grade: 6,
+                  level: Number(e.target.value),
+                }))
+              }>
+              {LEVEL_META.map((level) => (
+                <option key={level.n} value={level.n}>
+                  {level.title} · {level.subtitle}
+                </option>
+              ))}
+            </select>
+            <div className="mt-2">
+              <LevelBadge level={wordForm.level} />
             </div>
           </div>
 

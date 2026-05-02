@@ -39,7 +39,7 @@ export function AuthPage() {
  <MongolianText size="lg" color="#fff">ᠮ</MongolianText>
  </div>
  <p className="text-[22px] font-black text-ink">Монгол Бичиг</p>
- <p className="text-[13px] text-ink-muted font-semibold">Сурах систем · 6–12-р анги</p>
+ <p className="text-[13px] text-ink-muted font-semibold">Сурах систем · түвшинд суурилсан</p>
  </div>
 
  {/* Card */}

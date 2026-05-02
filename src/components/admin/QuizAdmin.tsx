@@ -2,6 +2,7 @@
 
 import { AdminModal } from "@/components/admin/AdminModal";
 import { MongolianKeyboard } from "@/components/ui/MongolianKeyboard";
+import { getLevelMeta } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 
@@ -661,7 +662,7 @@ export function QuizAdmin() {
               <option value="">Хичээл сонгоогүй</option>
               {lessons.map((lesson) => (
                 <option key={lesson.id} value={lesson.id}>
-                  {lesson.grade}-р анги · {lesson.title}
+                  {getLevelMeta(lesson.level).title} · {lesson.title}
                 </option>
               ))}
             </select>

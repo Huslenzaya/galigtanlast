@@ -131,7 +131,7 @@ export function AuthModal() {
           </div>
           <p className="text-[20px] font-black text-ink">GALIGTAN</p>
           <p className="text-[12px] text-ink-muted font-semibold mt-0.5">
-            Монгол бичиг сурах систем · 6–12-р анги
+            Монгол бичиг сурах систем · түвшинд суурилсан
           </p>
         </div>
 

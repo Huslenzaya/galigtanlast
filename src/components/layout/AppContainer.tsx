@@ -16,7 +16,7 @@ export function AppContainer({
     <div
       className={cn(
         "mx-auto w-full px-6 lg:px-8",
-        size === "6xl" ? "max-w-6xl" : "max-w-7xl",
+        size === "6xl" ? "max-w-6xl" : "max-w-[1440px]",
         className,
       )}>
       {children}

@@ -16,7 +16,7 @@ const nunito = Nunito({
 
 export const metadata: Metadata = {
   title: "GALIGTAN — Монгол бичиг сурах систем",
-  description: "GALIGTAN — 6–12-р ангийн монгол бичиг сурах систем",
+  description: "GALIGTAN — түвшинд суурилсан монгол бичиг сурах систем",
   icons: {
     icon: "/galigtan-logo.png",
     shortcut: "/galigtan-logo.png",
@@ -37,7 +37,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="font-nunito bg-paper text-ink min-h-screen overflow-x-hidden antialiased">
+      <body className="font-nunito  bg-paper text-ink min-h-screen overflow-x-hidden antialiased">
         <Navbar />
         <main className="pt-16 min-h-screen">{children}</main>
         <Footer />

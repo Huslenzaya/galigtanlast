@@ -12,7 +12,7 @@ type IconFn = (props: IconProps) => JSX.Element;
 function icon(d: string, fill = false): IconFn {
  return function Icon({ size=20, color="currentColor", className="", strokeWidth=1.8 }: IconProps) {
   return (
-   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+   <svg width={size} height={size} viewBox="0 0 24 24"
     stroke={fill ? "none" : color} fill={fill ? color : "none"}
     strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
     className={className}>

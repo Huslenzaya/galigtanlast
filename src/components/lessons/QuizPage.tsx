@@ -112,7 +112,7 @@ function buildFallbackQuiz(topic: string): QuizItem[] {
         ({
           type: "mc",
           q: q.q,
-          mg: q.mg,
+          mg: q.mg ?? undefined,
           opts: q.opts,
           c: q.c,
         }) satisfies McQuestion,
@@ -123,7 +123,7 @@ function buildFallbackQuiz(topic: string): QuizItem[] {
         ({
           type: "mc",
           q: q.q,
-          mg: q.mg,
+          mg: q.mg ?? undefined,
           opts: q.opts,
           c: q.c,
         }) satisfies McQuestion,

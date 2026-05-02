@@ -2,13 +2,19 @@
 
 import { AppContainer } from "@/components/layout/AppContainer";
 import {
+  IconAward,
   IconBook,
   IconChevRight,
   IconEye,
+  IconGlobe,
+  IconLayers,
   IconLock,
+  IconPen,
+  IconTarget,
 } from "@/components/ui/Icons";
 import { PageHero } from "@/components/ui/PageHero";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
+import { getLevelMeta } from "@/lib/data";
 import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { LessonId } from "@/types";
@@ -88,6 +94,122 @@ const LEVEL_STYLE: Record<
 };
 
 const FREE_LESSON_SLUGS = ["vowels"];
+const GUIDED_LESSON_VERSION = 1;
+
+interface GuidedExample {
+  script: string;
+  cyrillic: string;
+  note?: string;
+}
+
+interface GuidedTask {
+  prompt: string;
+  answer: string;
+  hint?: string;
+}
+
+interface GuidedLessonContent {
+  version: number;
+  intro: string;
+  keyPoints: string[];
+  examples: GuidedExample[];
+  tasks: GuidedTask[];
+  wrapUp?: string;
+}
+
+function parseGuidedLessonContent(content: string): GuidedLessonContent | null {
+  try {
+    const parsed = JSON.parse(content) as Partial<GuidedLessonContent>;
+
+    if (parsed.version !== GUIDED_LESSON_VERSION) return null;
+    if (typeof parsed.intro !== "string") return null;
+
+    return {
+      version: GUIDED_LESSON_VERSION,
+      intro: parsed.intro,
+      keyPoints: Array.isArray(parsed.keyPoints)
+        ? parsed.keyPoints.filter((item): item is string => typeof item === "string")
+        : [],
+      examples: Array.isArray(parsed.examples)
+        ? parsed.examples
+            .map((item) => item as Partial<GuidedExample>)
+            .filter(
+              (item): item is GuidedExample =>
+                typeof item.script === "string" &&
+                typeof item.cyrillic === "string",
+            )
+        : [],
+      tasks: Array.isArray(parsed.tasks)
+        ? parsed.tasks
+            .map((item) => item as Partial<GuidedTask>)
+            .filter(
+              (item): item is GuidedTask =>
+                typeof item.prompt === "string" &&
+                typeof item.answer === "string",
+            )
+        : [],
+      wrapUp: typeof parsed.wrapUp === "string" ? parsed.wrapUp : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeAnswer(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+const LEVEL_TONE_MAP = {
+  sky: {
+    dot: "bg-sky-300",
+    active: "bg-sky-50 border-sky-100 text-sky-300",
+    badge: "bg-sky-50 text-sky-300 border-sky-100",
+  },
+  grass: {
+    dot: "bg-grass-300",
+    active: "bg-grass-50 border-grass-100 text-grass-300",
+    badge: "bg-grass-50 text-grass-300 border-grass-100",
+  },
+  sand: {
+    dot: "bg-sand-300",
+    active: "bg-sand-50 border-sand-100 text-sand-300",
+    badge: "bg-sand-50 text-sand-300 border-sand-100",
+  },
+  ember: {
+    dot: "bg-ember-300",
+    active: "bg-ember-50 border-ember-100 text-ember-300",
+    badge: "bg-ember-50 text-ember-300 border-ember-100",
+  },
+  purple: {
+    dot: "bg-[#7c5cbf]",
+    active: "bg-[#f1ecfb] border-[#d8c8f1] text-[#7c5cbf]",
+    badge: "bg-[#f1ecfb] text-[#7c5cbf] border-[#d8c8f1]",
+  },
+  teal: {
+    dot: "bg-[#1a9e8a]",
+    active: "bg-[#e6f7f4] border-[#b9e6df] text-[#1a9e8a]",
+    badge: "bg-[#e6f7f4] text-[#1a9e8a] border-[#b9e6df]",
+  },
+} as const;
+
+function LevelIcon({
+  icon,
+  size = 16,
+  className,
+}: {
+  icon: string;
+  size?: number;
+  className?: string;
+}) {
+  const props = { size, strokeWidth: 2.2, className };
+
+  if (icon === "layers") return <IconLayers {...props} />;
+  if (icon === "pen") return <IconPen {...props} />;
+  if (icon === "target") return <IconTarget {...props} />;
+  if (icon === "award") return <IconAward {...props} />;
+  if (icon === "globe") return <IconGlobe {...props} />;
+  return <IconBook {...props} />;
+}
 
 function escapeHtml(value: string) {
   return value
@@ -212,6 +334,10 @@ export function LessonsPage() {
   const [progressMap, setProgressMap] = useState<
     Record<string, LessonProgressItem["status"]>
   >({});
+  const [taskInputs, setTaskInputs] = useState<Record<number, string>>({});
+  const [taskResults, setTaskResults] = useState<
+    Record<number, "correct" | "wrong">
+  >({});
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -302,16 +428,16 @@ export function LessonsPage() {
     const map = new Map<number, LessonItem[]>();
 
     lessons.forEach((lesson) => {
-      const arr = map.get(lesson.grade) ?? [];
+      const arr = map.get(lesson.level) ?? [];
       arr.push(lesson);
-      map.set(lesson.grade, arr);
+      map.set(lesson.level, arr);
     });
 
     return Array.from(map.entries())
       .sort((a, b) => a[0] - b[0])
-      .map(([grade, items], index) => ({
-        cat: `${grade}-р анги`,
-        color: COLOR_ORDER[index % COLOR_ORDER.length],
+      .map(([level, items]) => ({
+        level,
+        meta: getLevelMeta(level),
         items,
       }));
   }, [lessons]);
@@ -321,11 +447,30 @@ export function LessonsPage() {
     return lessons.find((l) => l.id === selectedLessonId) ?? lessons[0];
   }, [lessons, selectedLessonId]);
 
+  const guidedLesson = useMemo(
+    () =>
+      selectedLesson
+        ? parseGuidedLessonContent(selectedLesson.content)
+        : null,
+    [selectedLesson],
+  );
+
+  useEffect(() => {
+    setTaskInputs({});
+    setTaskResults({});
+  }, [selectedLessonId]);
+
   const isFree = selectedLesson
     ? FREE_LESSON_SLUGS.includes(selectedLesson.slug)
     : false;
 
   const canAccess = isLoggedIn || isFree;
+  const totalTasks = guidedLesson?.tasks.length ?? 0;
+  const completedTasks = guidedLesson
+    ? guidedLesson.tasks.filter((_, index) => taskResults[index] === "correct")
+        .length
+    : 0;
+  const canStartQuiz = totalTasks === 0 || completedTasks === totalTasks;
 
   function handleLessonClick(lesson: LessonItem) {
     const free = FREE_LESSON_SLUGS.includes(lesson.slug);
@@ -341,6 +486,8 @@ export function LessonsPage() {
     if (isLoggedIn && userId) {
       syncStartProgress(lesson.id);
     }
+
+    router.push(`/lessons/${lesson.slug}`);
   }
 
   async function startLessonQuiz() {
@@ -356,6 +503,16 @@ export function LessonsPage() {
     });
 
     router.push("/quiz");
+  }
+
+  function checkTask(task: GuidedTask, index: number) {
+    const isCorrect =
+      normalizeAnswer(taskInputs[index] ?? "") === normalizeAnswer(task.answer);
+
+    setTaskResults((prev) => ({
+      ...prev,
+      [index]: isCorrect ? "correct" : "wrong",
+    }));
   }
 
   if (loading) {
@@ -450,19 +607,84 @@ export function LessonsPage() {
 
       {activeTab === "lessons" ? (
         <AppContainer size="6xl" className="py-8 pb-14">
-          <div className="grid grid-cols-[280px_1fr] gap-8">
-            <aside className="flex flex-col gap-2">
-              {groupedLessons.map((cat) => (
-                <div key={cat.cat} className="mb-2">
-                  <p className="text-[11px] font-extrabold text-ink-muted tracking-[0.5px] uppercase px-1 py-2">
-                    {cat.cat}
-                  </p>
+          <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white border-2 border-paper-100 rounded-[24px] p-5">
+              <p className="text-[28px] font-black text-sky-300">
+                {lessons.length}
+              </p>
+              <p className="text-[12px] font-extrabold text-ink-muted uppercase">
+                Нийт хичээл
+              </p>
+            </div>
+            <div className="bg-white border-2 border-paper-100 rounded-[24px] p-5">
+              <p className="text-[28px] font-black text-grass-300">
+                {groupedLessons.length}
+              </p>
+              <p className="text-[12px] font-extrabold text-ink-muted uppercase">
+                Суралцах түвшин
+              </p>
+            </div>
+            <div className="bg-white border-2 border-paper-100 rounded-[24px] p-5">
+              <p className="text-[28px] font-black text-sand-300">
+                {
+                  Object.values(progressMap).filter(
+                    (status) => status === "COMPLETED",
+                  ).length
+                }
+              </p>
+              <p className="text-[12px] font-extrabold text-ink-muted uppercase">
+                Дууссан хичээл
+              </p>
+            </div>
+          </div>
 
-                  <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-6">
+            {groupedLessons.map((cat) => {
+                const tone =
+                  LEVEL_TONE_MAP[
+                    cat.meta.tone as keyof typeof LEVEL_TONE_MAP
+                  ] ?? LEVEL_TONE_MAP.sky;
+
+                return (
+                  <section
+                    key={cat.level}
+                    className="bg-white border-2 border-paper-100 rounded-[28px] p-5 md:p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={cn(
+                            "w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0",
+                            tone.badge,
+                          )}>
+                          <LevelIcon icon={cat.meta.icon} size={22} />
+                        </div>
+                        <div>
+                          <div
+                            className={cn(
+                              "inline-flex items-center gap-2 border rounded-xl px-3 py-1.5 mb-2",
+                              tone.badge,
+                            )}>
+                            <span className="text-[11px] font-extrabold uppercase tracking-[0.5px]">
+                              {cat.meta.title}
+                            </span>
+                            <span className="text-[10px] font-black opacity-70">
+                              {cat.items.length} хичээл
+                            </span>
+                          </div>
+                          <h3 className="text-[22px] md:text-[26px] font-black text-ink">
+                            {cat.meta.subtitle}
+                          </h3>
+                          <p className="text-[13px] text-ink-muted font-semibold leading-relaxed max-w-[760px] mt-1">
+                            {cat.meta.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {cat.items.map((lesson) => {
                       const free = FREE_LESSON_SLUGS.includes(lesson.slug);
                       const accessible = isLoggedIn || free;
-                      const isActive = selectedLesson.id === lesson.id;
                       const progressStatus = progressMap[lesson.id];
 
                       return (
@@ -470,129 +692,78 @@ export function LessonsPage() {
                           key={lesson.id}
                           onClick={() => handleLessonClick(lesson)}
                           className={cn(
-                            "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-bold text-left transition-all duration-150 border",
-                            isActive
-                              ? COLOR_MAP[cat.color].active
-                              : accessible
-                                ? "bg-white text-ink border-paper-100 hover:border-sky-100 hover:bg-paper-50"
-                                : "bg-white text-ink-muted/50 border-paper-100",
+                            "w-full min-h-[180px] flex flex-col items-start text-left rounded-[24px] border-2 p-5 transition-all duration-150",
+                            accessible
+                              ? "bg-paper-50 text-ink border-paper-100 hover:border-sky-100 hover:-translate-y-0.5"
+                              : "bg-paper-50 text-ink-muted/60 border-paper-100",
                           )}>
-                          <div
-                            className={cn(
-                              "w-2.5 h-2.5 rounded-full shrink-0",
-                              progressStatus === "COMPLETED"
-                                ? "bg-grass-300"
-                                : progressStatus === "IN_PROGRESS"
-                                  ? "bg-sand-300"
-                                  : COLOR_MAP[cat.color].dot,
-                            )}
-                          />
+                          <div className="w-full flex items-start justify-between gap-3 mb-4">
+                            <div
+                              className={cn(
+                                "w-9 h-9 rounded-2xl flex items-center justify-center",
+                                tone.active,
+                              )}>
+                              <span
+                                className={cn(
+                                  "w-2.5 h-2.5 rounded-full",
+                                  progressStatus === "COMPLETED"
+                                    ? "bg-grass-300"
+                                    : progressStatus === "IN_PROGRESS"
+                                      ? "bg-sand-300"
+                                      : tone.dot,
+                                )}
+                              />
+                            </div>
 
-                          <span className="flex-1 leading-snug">
+                            {progressStatus === "COMPLETED" ? (
+                              <span className="text-[10px] bg-grass-50 text-grass-300 px-2.5 py-1 rounded-xl font-extrabold shrink-0">
+                                Дууссан
+                              </span>
+                            ) : progressStatus === "IN_PROGRESS" ? (
+                              <span className="text-[10px] bg-sand-50 text-sand-300 px-2.5 py-1 rounded-xl font-extrabold shrink-0">
+                                Судалж буй
+                              </span>
+                            ) : !accessible ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] bg-white border border-paper-100 text-ink-muted px-2.5 py-1 rounded-xl font-extrabold shrink-0">
+                                <IconLock
+                                  size={10}
+                                  color="#6a6a8a"
+                                  strokeWidth={2}
+                                  className="opacity-70"
+                                />
+                                Нэвтрэх
+                              </span>
+                            ) : free && !isLoggedIn ? (
+                              <span className="text-[10px] bg-sky-50 text-sky-300 px-2.5 py-1 rounded-xl font-extrabold shrink-0">
+                                Нээлттэй
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <span className="text-[18px] font-black leading-tight mb-2">
                             {lesson.title}
                           </span>
 
-                          {progressStatus === "COMPLETED" ? (
-                            <span className="text-[10px] bg-grass-50 text-grass-300 px-2.5 py-1 rounded-xl font-extrabold shrink-0">
-                              Дууссан
-                            </span>
-                          ) : progressStatus === "IN_PROGRESS" ? (
-                            <span className="text-[10px] bg-sand-50 text-sand-300 px-2.5 py-1 rounded-xl font-extrabold shrink-0">
-                              Судалж буй
-                            </span>
-                          ) : !accessible ? (
-                            <IconLock
-                              size={11}
-                              color="#6a6a8a"
-                              strokeWidth={2}
-                              className="opacity-50 shrink-0"
-                            />
-                          ) : free && !isLoggedIn ? (
-                            <span className="text-[10px] bg-sky-50 text-sky-300 px-2.5 py-1 rounded-xl font-extrabold shrink-0">
-                              Нээлттэй
-                            </span>
-                          ) : isActive ? (
-                            <IconChevRight
-                              size={12}
-                              color="#1a6bbd"
-                              strokeWidth={2.5}
-                            />
-                          ) : null}
+                          <span className="text-[13px] text-ink-muted font-semibold leading-relaxed line-clamp-3 flex-1">
+                            {lesson.description ||
+                              "Дүрэм, жишээ, дасгал, төгсгөлийн шалгалттай хичээл."}
+                          </span>
+
+                          <span
+                            className={cn(
+                              "mt-5 inline-flex items-center gap-1.5 text-[12px] font-extrabold",
+                              accessible ? "text-sky-300" : "text-ink-muted",
+                            )}>
+                            Хичээл эхлэх
+                            <IconChevRight size={13} strokeWidth={2.5} />
+                          </span>
                         </button>
                       );
                     })}
-                  </div>
-                </div>
-              ))}
-            </aside>
-
-            <main>
-              {canAccess ? (
-                <ScrollReveal>
-                  <div className="bg-white border border-paper-100 rounded-[28px] p-9 mb-5">
-                    <div className="flex items-start justify-between gap-4 mb-6">
-                      <div className="flex-1">
-                        <h3 className="text-[24px] font-black text-ink">
-                          {selectedLesson.title}
-                        </h3>
-
-                        {selectedLesson.description && (
-                          <p className="text-[14px] text-ink-muted font-semibold mt-2 leading-relaxed max-w-[760px]">
-                            {selectedLesson.description}
-                          </p>
-                        )}
-                      </div>
-
-                      {isFree && !isLoggedIn && (
-                        <span className="text-[11px] bg-sky-50 border border-sky-100 text-sky-300 px-3 py-1.5 rounded-xl font-extrabold shrink-0">
-                          Нээлттэй хичээл
-                        </span>
-                      )}
                     </div>
-
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: formatLessonContent(selectedLesson.content),
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    onClick={startLessonQuiz}
-                    className="w-full bg-sky-300 hover:bg-sky-200 text-white font-extrabold text-[15px] rounded-2xl py-4 transition-all">
-                    Шалгалт өгөх
-                  </button>
-                </ScrollReveal>
-              ) : (
-                <div className="bg-white border border-paper-100 rounded-[28px] p-12 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-paper-50 border border-paper-100 flex items-center justify-center mx-auto mb-4">
-                    <IconLock size={22} color="#6a6a8a" strokeWidth={1.8} />
-                  </div>
-
-                  <h3 className="text-[22px] font-black mb-2">
-                    {selectedLesson.title}
-                  </h3>
-
-                  <p className="text-ink-muted font-semibold mb-6 max-w-[300px] mx-auto text-[13px] leading-relaxed">
-                    Энэ хичээлийг үзэхийн тулд нэвтрэх шаардлагатай.
-                  </p>
-
-                  <div className="flex gap-3 justify-center">
-                    <button
-                      onClick={() => openAuthModal("up")}
-                      className="bg-sky-300 text-white font-extrabold text-[14px] px-6 py-2.5 rounded-xl hover:bg-sky-200 transition-all">
-                      Бүртгүүлэх
-                    </button>
-
-                    <button
-                      onClick={() => openAuthModal("in")}
-                      className="bg-white border border-paper-100 text-ink font-bold text-[14px] px-6 py-2.5 rounded-xl hover:border-sky-100 transition-all">
-                      Нэвтрэх
-                    </button>
-                  </div>
-                </div>
-              )}
-            </main>
+                  </section>
+                );
+              })}
           </div>
         </AppContainer>
       ) : (

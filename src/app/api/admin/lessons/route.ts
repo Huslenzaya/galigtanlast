@@ -8,7 +8,7 @@ export async function GET() {
     if (!auth.ok) return auth.response;
 
     const lessons = await prisma.lesson.findMany({
-      orderBy: [{ grade: "asc" }, { level: "asc" }, { sortOrder: "asc" }],
+      orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
     });
 
     return NextResponse.json(lessons);
@@ -28,9 +28,9 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    if (!body.title || !body.slug || !body.grade || !body.level) {
+    if (!body.title || !body.slug || !body.level) {
       return NextResponse.json(
-        { message: "title, slug, grade, level заавал байна." },
+        { message: "title, slug, level заавал байна." },
         { status: 400 },
       );
     }
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         title: body.title.trim(),
         slug: body.slug.trim(),
         description: body.description?.trim() ?? "",
-        grade: Number(body.grade),
+        grade: Number(body.grade ?? 6),
         level: Number(body.level),
         sortOrder: Number(body.sortOrder ?? 1),
         content: body.content ?? "",
